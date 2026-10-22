@@ -1,0 +1,1 @@
+This is serverless AWS project of a url-shortener to get familiar with AWS services.
