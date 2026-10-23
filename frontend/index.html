@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>snip. — URL Shortener</title>
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f3ef;
+      --surface:   #ffffff;
+      --border:    #e2ddd6;
+      --muted:     #bbb5ac;
+      --text:      #1a1714;
+      --text-dim:  #9c9590;
+      --accent:    #2d7a3a;
+      --accent-dk: #1f5c2a;
+      --error:     #c0392b;
+      --font-mono: 'DM Mono', monospace;
+      --font-disp: 'Fraunces', serif;
+      --radius:    12px;
+      --ease:      cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ─── Noise Overlay ────────────────────────────────────────── */
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.018;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-size: 180px;
+    }
+
+    /* ─── Glow blob ────────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -20vh;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 500px;
+      background: radial-gradient(ellipse at center, rgba(45, 122, 58, 0.07) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── Header ───────────────────────────────────────────────── */
+    header {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 520px;
+      padding: 60px 24px 0;
+      animation: fadeDown 0.7s var(--ease) both;
+    }
+
+    .logo {
+      font-family: var(--font-disp);
+      font-size: 42px;
+      font-weight: 300;
+      font-style: italic;
+      letter-spacing: -1px;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .dot {
+      color: var(--accent);
+    }
+
+    .tagline {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      font-weight: 300;
+    }
+
+    /* ─── Main ─────────────────────────────────────────────────── */
+    main {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 520px;
+      padding: 40px 24px 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ─── Card ─────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      animation: fadeUp 0.7s var(--ease) 0.1s both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(45,122,58,0.15), transparent);
+    }
+
+    /* ─── Input Group ──────────────────────────────────────────── */
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-transform: lowercase;
+      font-weight: 400;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    input[type="url"],
+    input[type="number"] {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 300;
+      padding: 8px 0;
+      caret-color: var(--accent);
+      transition: color 0.2s;
+    }
+
+    input[type="url"]::placeholder {
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    input[type="number"] {
+      width: 80px;
+      font-size: 22px;
+      font-weight: 300;
+      padding: 4px 0;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+    }
+
+    .input-line {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 1px;
+      width: 100%;
+      background: var(--border);
+      transition: background 0.3s;
+    }
+
+    .input-line::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 1px;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.4s var(--ease);
+    }
+
+    .input-wrapper:focus-within .input-line {
+      background: var(--muted);
+    }
+
+    .input-wrapper:focus-within .input-line::after {
+      width: 100%;
+    }
+
+    /* ─── Expiry Row ───────────────────────────────────────────── */
+    .expiry-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .expiry-wrapper {
+      width: 80px;
+    }
+
+    .unit {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: 300;
+    }
+
+    /* ─── Button ───────────────────────────────────────────────── */
+    button#shortenBtn {
+      position: relative;
+      margin-top: 4px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 14px 28px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      align-self: flex-start;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      overflow: hidden;
+    }
+
+    button#shortenBtn:hover {
+      background: var(--accent-dk);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(45, 122, 58, 0.25);
+    }
+
+    button#shortenBtn:active {
+      transform: translateY(0px);
+    }
+
+    button#shortenBtn.loading .btn-text,
+    button#shortenBtn.loading .btn-arrow {
+      opacity: 0;
+    }
+
+    button#shortenBtn.loading .btn-loader {
+      opacity: 1;
+    }
+
+    .btn-text, .btn-arrow {
+      transition: opacity 0.2s;
+    }
+
+    .btn-arrow {
+      font-size: 16px;
+      transition: transform 0.3s var(--ease), opacity 0.2s;
+    }
+
+    button#shortenBtn:hover .btn-arrow {
+      transform: translateX(3px);
+    }
+
+    .btn-loader {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      opacity: 0;
+      transition: opacity 0.2s;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    /* ─── Result Card ──────────────────────────────────────────── */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      animation: slideIn 0.5s var(--ease) both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .result-card.visible {
+      display: flex;
+    }
+
+    .result-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--accent);
+      border-radius: 3px 0 0 3px;
+    }
+
+    .result-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-transform: lowercase;
+    }
+
+    .result-url-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .result-url {
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--accent);
+      flex: 1;
+    }
+
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 6px 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(200, 240, 74, 0.06);
+    }
+
+    .copy-btn.copied {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(200, 240, 74, 0.1);
+    }
+
+    .result-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 300;
+    }
+
+    /* ─── Error Card ───────────────────────────────────────────── */
+    .error-card {
+      display: none;
+      background: rgba(192, 57, 43, 0.05);
+      border: 1px solid rgba(192, 57, 43, 0.2);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 14px;
+      animation: slideIn 0.4s var(--ease) both;
+    }
+
+    .error-card.visible {
+      display: flex;
+    }
+
+    .error-icon {
+      color: var(--error);
+      font-size: 15px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .error-message {
+      color: var(--error);
+      font-size: 13px;
+      font-weight: 300;
+      line-height: 1.5;
+    }
+
+    /* ─── Footer ───────────────────────────────────────────────── */
+    footer {
+      position: relative;
+      z-index: 1;
+      padding: 24px;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      font-weight: 300;
+      animation: fadeUp 0.7s var(--ease) 0.3s both;
+    }
+
+    /* ─── Animations ───────────────────────────────────────────── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: translateX(-50%) rotate(360deg); }
+    }
+
+    /* ─── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 560px) {
+      header { padding: 40px 20px 0; }
+      main { padding: 28px 20px 20px; }
+      .card { padding: 24px 20px; }
+      .logo { font-size: 34px; }
+      .result-url { font-size: 14px; }
+    }
+    .result-url { overflow-wrap: anywhere; text-decoration: none; }
+    .result-url:hover { text-decoration: underline; }
+    button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="noise"></div>
+
+<header>
+  <div class="logo">snip<span class="dot">.</span></div>
+  <div class="tagline">paste long. get short.</div>
+</header>
+
+<main>
+  <div class="card" id="card">
+
+    <div class="input-group">
+      <label for="urlInput">long url</label>
+      <div class="input-wrapper">
+        <input
+                type="url"
+                id="urlInput"
+                placeholder="https://your-very-long-url.com/goes/here"
+                autocomplete="off"
+                spellcheck="false"
+        />
+        <div class="input-line"></div>
+      </div>
+    </div>
+
+    <div class="input-group expiry-group">
+      <label for="expiryInput">expires in</label>
+      <div class="expiry-row">
+        <div class="input-wrapper expiry-wrapper">
+          <input
+                  type="number"
+                  id="expiryInput"
+                  placeholder=""
+                  min="1"
+                  max="8760"
+          />
+          <div class="input-line"></div>
+        </div>
+        <span class="unit">hours</span>
+      </div>
+    </div>
+
+    <button id="shortenBtn" onclick="shortenUrl()">
+      <span class="btn-text">shorten</span>
+      <span class="btn-arrow">→</span>
+      <div class="btn-loader" id="btnLoader"></div>
+    </button>
+
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div class="result-label">your short link</div>
+    <div class="result-url-row">
+      <a class="result-url" id="resultUrl" target="_blank" rel="noopener noreferrer"></a>
+      <button class="copy-btn" id="copyBtn" onclick="copyUrl()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M3 10.5H2.5A1.5 1.5 0 0 1 1 9V2.5A1.5 1.5 0 0 1 2.5 1H9A1.5 1.5 0 0 1 10.5 2.5V3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span class="copy-label" id="copyLabel">copy</span>
+      </button>
+    </div>
+    <div class="result-meta" id="resultMeta"></div>
+  </div>
+
+  <div class="error-card" id="errorCard">
+    <div class="error-icon">⚠</div>
+    <div class="error-message" id="errorMessage"></div>
+  </div>
+
+</main>
+
+<footer>
+  <span>built to be fast.</span>
+</footer>
+
+<script>
+  const shortenBtn = document.getElementById('shortenBtn');
+  const resultCard = document.getElementById('resultCard');
+  const resultUrl = document.getElementById('resultUrl');
+  const errorCard = document.getElementById('errorCard');
+  const errorMessage = document.getElementById('errorMessage');
+  const copyLabel = document.getElementById('copyLabel');
+  let shortLink = '';
+
+  async function shortenUrl() {
+    if (shortenBtn.disabled) return;
+    const originalUrl = document.getElementById('urlInput').value.trim();
+    const hours = document.getElementById('expiryInput').value;
+    const body = { originalUrl };
+    if (hours) body.expiryHours = Number(hours);
+
+    resultCard.classList.remove('visible');
+    errorCard.classList.remove('visible');
+    shortenBtn.classList.add('loading');
+    shortenBtn.disabled = true;
+    shortenBtn.setAttribute('aria-busy', 'true');
+
+    try {
+      const res = await fetch('/api/url/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        errorMessage.textContent = 'Error: ' + text;
+        errorCard.classList.add('visible');
+        return;
+      }
+      shortLink = location.origin + '/url/' + text;
+      resultUrl.href = shortLink;
+      resultUrl.textContent = shortLink;
+      copyLabel.textContent = 'copy';
+      document.getElementById('copyBtn').classList.remove('copied');
+      document.getElementById('resultMeta').textContent = hours ? 'expires in ' + hours + ' hours' : '';
+      resultCard.classList.add('visible');
+    } catch (e) {
+      errorMessage.textContent = 'Network error';
+      errorCard.classList.add('visible');
+    } finally {
+      shortenBtn.classList.remove('loading');
+      shortenBtn.disabled = false;
+      shortenBtn.removeAttribute('aria-busy');
+    }
+  }
+
+  async function copyUrl() {
+    if (!shortLink) return;
+    try {
+      await navigator.clipboard.writeText(shortLink);
+      copyLabel.textContent = 'copied';
+      document.getElementById('copyBtn').classList.add('copied');
+    } catch (e) {
+      copyLabel.textContent = 'select link';
+      window.getSelection()?.selectAllChildren(resultUrl);
+    }
+  }
+
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') shortenUrl();
+  });
+  document.getElementById('expiryInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') shortenUrl();
+  });
+</script>
+</body>
+</html>
