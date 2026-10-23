@@ -1,0 +1,31 @@
+title URL Shortener on AWS (Serverless)
+direction right
+
+Users [icon: users]
+
+AWS Cloud [icon: aws-cloud] {
+  Region ap-south-1 [icon: aws-region] {
+    CloudFront [icon: aws-cloudfront, label: "CloudFront (single domain)"]
+    S3 Frontend [icon: aws-s3, label: "S3 bucket (private, OAC)"]
+    API Gateway [icon: aws-api-gateway, label: "API Gateway (HTTP API)"]
+    Create Lambda [icon: aws-lambda, label: "Lambda create (Java 21)"]
+    Redirect Lambda [icon: aws-lambda, label: "Lambda redirect (Java 21)"]
+    DynamoDB [icon: aws-dynamodb, label: "DynamoDB url-shortener (TTL)"]
+    CloudWatch [icon: aws-cloudwatch, label: "CloudWatch Logs and Alarms"]
+    SNS Topic [icon: aws-sns, label: "SNS topic"]
+  }
+}
+
+Email [icon: mail]
+
+Users > CloudFront: "HTTPS"
+CloudFront > S3 Frontend: "/ (static site)"
+CloudFront > API Gateway: "/api/* and /url/*"
+API Gateway > Create Lambda: "POST /api/url/shorten"
+API Gateway > Redirect Lambda: "GET /url/{shortCode}"
+Create Lambda > DynamoDB: "PutItem"
+Redirect Lambda > DynamoDB: "UpdateItem"
+Create Lambda > CloudWatch: "logs"
+Redirect Lambda > CloudWatch: "logs"
+CloudWatch > SNS Topic: "alarm on Errors"
+SNS Topic > Email: "notify"
